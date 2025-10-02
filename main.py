@@ -5,6 +5,19 @@ import os
 import signal
 from google import genai
 
+prompt_template = """
+Answer the question strictly in json format. Your answer will be in field 'response'.
+Avoid markdown.
+Example:
+Question: "How many minutes are in one hour?"
+Answer: {{
+  "response": "There are 60 minutes in one hour."
+}}
+
+Question: "{}"
+Answer:
+"""
+
 logging.basicConfig(
     format="%(levelname)s: %(asctime)s %(filename)s:%(funcName)s %(message)s",
     level=logging.INFO,
@@ -26,8 +39,8 @@ def start(message, res=False):
 
 @bot.message_handler(content_types=["text"])
 def handle_text(message):
-    logging.info("from {} {} > ".format(message.chat.id, message.from_user.username, message.text))
-    prompt = message.text.encode("utf-8", "ignore").decode("utf-8")
+    logging.info("from {} {} > {}".format(message.chat.id, message.from_user.username, message.text))
+    prompt = prompt_template.format(message.text.encode("utf-8", "ignore").decode("utf-8"))
     response = gemini_client.models.generate_content(model = model, contents = prompt).text.strip()
     bot.send_message(message.chat.id, response)
 

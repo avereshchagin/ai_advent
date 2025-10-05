@@ -24,7 +24,6 @@ logging.basicConfig(
 )
 
 load_dotenv()
-print(os.getenv("TELEGRAM_TOKEN"))
 bot = telebot.TeleBot(os.getenv("TELEGRAM_TOKEN"))
 
 gemini_client = genai.Client(api_key=os.getenv("GEMINI_TOKEN"))

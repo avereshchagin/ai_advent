@@ -1,0 +1,88 @@
+import logging
+import re
+import time
+
+import telebot
+from dotenv import load_dotenv
+import os
+import signal
+from openai import OpenAI
+
+logging.basicConfig(
+    format="%(levelname)s: %(asctime)s %(filename)s:%(funcName)s %(message)s",
+    level=logging.INFO,
+)
+
+load_dotenv()
+bot = telebot.TeleBot(os.getenv("TELEGRAM_TOKEN"))
+
+
+class Model:
+    def __init__(self, name, client):
+        self.name = name
+        self.client = client
+
+    def generate(self, prompt):
+        completion = self.client.chat.completions.create(
+            model=self.name,
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+        )
+        response = completion.choices[0].message.content
+        response = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL)
+        return response
+
+
+class LlmPipeline:
+    def __init__(self, source_model, verification_model):
+        self.source_model = source_model
+        self.verification_model = verification_model
+
+    def generate(self, prompt):
+        source_prompt = "Реализуй алгоритм на языке Kotlin. В ответе выведи только код, не используй маркдаун:\n" + prompt
+        source_response = self.source_model.generate(source_prompt)
+        verification_prompt = "Проверь код на корректность. Проверь несколько корнер-кейсов, выведи ход рассуждения:\n" + source_response
+        verification_response = self.verification_model.generate(verification_prompt)
+        return [source_response, verification_response]
+
+
+client = OpenAI(
+    base_url="https://router.huggingface.co/v1",
+    api_key=os.getenv("HF_TOKEN"),
+)
+
+pipeline = LlmPipeline(
+    source_model=Model("zai-org/GLM-4.6:novita", client),
+    verification_model=Model("meta-llama/Llama-3.3-70B-Instruct:fireworks-ai", client),
+)
+
+
+@bot.message_handler(commands=["start"])
+def start(message, res=False):
+    logging.info("from {} {}".format(message.chat.id, message.from_user.username))
+    bot.send_message(message.chat.id, "Добро пожаловать в AI бот. Чем я могу помочь?")
+
+
+@bot.message_handler(content_types=["text"])
+def handle_text(message):
+    logging.info("from {} {} > {}".format(message.chat.id, message.from_user.username, message.text))
+    prompt = message.text.encode("utf-8", "ignore").decode("utf-8")
+    responses = pipeline.generate(prompt)
+    for response in responses:
+        bot.send_message(message.chat.id, response[:4096])
+
+
+def signal_handler(sig, frame):
+    logging.info("Terminating signal received")
+    bot.stop_bot()
+
+
+if __name__ == "__main__":
+    signal.signal(signal.SIGTERM, signal_handler)
+    logging.info("Start polling")
+    bot.infinity_polling(logger_level=logging.INFO)
+    logging.info("Stop polling")

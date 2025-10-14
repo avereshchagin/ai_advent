@@ -67,7 +67,7 @@ def handle_text(message):
                         parameters={
                             "type": ["string"],
                             "properties": {"path": {"type": "string"}},
-                            "required": ["city"]
+                            "required": ["path"]
                         }
                     )
                 )
